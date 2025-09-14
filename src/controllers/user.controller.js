@@ -150,8 +150,8 @@ const logoutUser = asyncHandler(async (req, res) => {
     await User.findByIdAndUpdate(
         req.user._id,            // here user gets added to the req object bcz of verifyJwt middleware
         {
-            $set: {
-                refreshToken: "undefined"
+            $unset: {
+                refreshToken: 1
             }
         },
         {
@@ -190,6 +190,8 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
             throw new ApiError(401, "Invalid refresh token")
         }
 
+        console.log("incomingRefreshToken: ", incomingRefreshToken)
+        console.log("Refresh Token: ", user?.refreshToken)
         if (incomingRefreshToken !== user?.refreshToken) {
             throw new ApiError(401, "Refresh token is expired or used")
         }
@@ -199,12 +201,12 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
             secure: true
         }
 
-        const { accessToken, newRefreshToken } = await generateAccessAndRefreshToken(user._id)
+        const { accessToken, refreshToken: newRefreshToken } = await generateAccessAndRefreshToken(user._id)
 
         return res
             .status(200)
             .cookie("accessToken", accessToken, options)
-            .cookie("refreshToken", refreshToken, options)
+            .cookie("refreshToken", newRefreshToken, options)
             .json(
                 new ApiResponse(
                     200,
@@ -252,7 +254,7 @@ const updateAccountDetails = asyncHandler(async (req, res) => {
         throw new ApiError(400, "All fields are required")
     }
 
-    const user = User.findByIdAndUpdate(
+    const user = await User.findByIdAndUpdate(
         req.user?._id,
         {
             $set: {         // both are same syntax
@@ -260,14 +262,14 @@ const updateAccountDetails = asyncHandler(async (req, res) => {
                 email: email
             }
         },
-        {new: true}
+        { new: true }
     ).select("-password")
 
     return res
-    .status(200)
-    .json(
-        new ApiResponse(200, user, "Account details updated successfully")
-    )
+        .status(200)
+        .json(
+            new ApiResponse(200, user, "Account details updated successfully")
+        )
 })
 
 const updateUserAvatar = asyncHandler(async (req, res) => {
@@ -290,14 +292,14 @@ const updateUserAvatar = asyncHandler(async (req, res) => {
                 avatar: avatar.url
             }
         },
-        {new: true}
+        { new: true }
     ).select("-password")
 
     return res
-    .status(200)
-    .json(
-        new ApiResponse(200, user, "Avatar updated successfully")
-    )
+        .status(200)
+        .json(
+            new ApiResponse(200, user, "Avatar updated successfully")
+        )
 })
 
 const updateUserCoverImage = asyncHandler(async (req, res) => {
@@ -307,7 +309,7 @@ const updateUserCoverImage = asyncHandler(async (req, res) => {
         throw new ApiError(400, "CoverImage file is missing")
     }
 
-    const coverImage = await uploadOnCloudinary(avatarLocalPath)
+    const coverImage = await uploadOnCloudinary(coverImageLocalPath)
 
     if (!coverImage.url) {
         throw new ApiError(400, "Error while uploading the image")
@@ -320,14 +322,14 @@ const updateUserCoverImage = asyncHandler(async (req, res) => {
                 coverImage: coverImage.url
             }
         },
-        {new: true}
+        { new: true }
     ).select("-password")
 
     return res
-    .status(200)
-    .json(
-        new ApiResponse(200, user, "CoverImage updated successfully")
-    )
+        .status(200)
+        .json(
+            new ApiResponse(200, user, "CoverImage updated successfully")
+        )
 })
 
 const getUserChannelProfile = asyncHandler(async (req, res) => {
@@ -369,7 +371,7 @@ const getUserChannelProfile = asyncHandler(async (req, res) => {
                 },
                 isSubscribed: {
                     $cond: {
-                        if: {$in: [req.user?._id, "subscribers.subscriber"]},
+                        if: { $in: [req.user?._id, "$subscribers.subscriber"] },
                         then: true,
                         else: false
                     }
@@ -395,10 +397,10 @@ const getUserChannelProfile = asyncHandler(async (req, res) => {
     }
 
     return res
-    .status(200)
-    .json(
-        new ApiResponse(200, channel[0], "user channel fetched successfully")
-    )
+        .status(200)
+        .json(
+            new ApiResponse(200, channel[0], "user channel fetched successfully")
+        )
 })
 
 const getWatchHistory = asyncHandler(async (req, res) => {
@@ -436,7 +438,7 @@ const getWatchHistory = asyncHandler(async (req, res) => {
                     {
                         $addFields: {
                             owner: {
-                                $first: "owner"
+                                $first: "$owner"
                             }
                         }
                     }
@@ -446,12 +448,14 @@ const getWatchHistory = asyncHandler(async (req, res) => {
     ])
 
     return res
-    .status(200)
-    .json(
-        200,
-        user[0].watchHistory,
-        "Watch history fetched successfully"
-    )
+        .status(200)
+        .json(
+            new ApiResponse(
+                200,
+                user[0].watchHistory,
+                "Watch history fetched successfully"
+            )
+        )
 })
 
 export {
